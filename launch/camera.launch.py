@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Launch a USB camera using params_1.yaml and its camera_info_url setting."""
+"""Launch the USB camera and its image transports in the /fisheye namespace."""
 
 import glob
 import os
@@ -89,14 +89,11 @@ def _launch_setup(context, *args, **kwargs):
         package='usb_cam',
         executable='usb_cam_node_exe',
         name='usb_cam',
+        namespace='fisheye',
         output='screen',
         parameters=[
             camera_config,
             {'video_device': video_device},
-        ],
-        remappings=[
-            ('image_raw', '/fisheye/image_raw'),
-            ('camera_info', '/fisheye/camera_info'),
         ],
     )]
 
