@@ -3,12 +3,12 @@
       video_device: "/dev/video0"
       framerate: 30.0
       io_method: "mmap"
-      frame_id: "camera"
-      pixel_format: "mjpeg2rgb"  # see usb_cam/supported_formats for list of supported formats
+      frame_id: "See3CAM_CU31"
+      pixel_format: "uyvy"  # see usb_cam/supported_formats for list of supported formats
       av_device_format: "YUV422P"
-      image_width: 640
-      image_height: 480
-      camera_name: "test_camera"
+      image_width: 1920
+      image_height: 1080
+      camera_name: "See3CAM_CU31"
       camera_info_url: "package://usb_cam/config/camera_info.yaml"
       brightness: -1
       contrast: -1

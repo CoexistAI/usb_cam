@@ -26,6 +26,8 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 
+#include <algorithm>
+#include <chrono>
 #include <memory>
 #include <sstream>
 #include <string>
@@ -101,7 +103,6 @@ UsbCamNode::~UsbCamNode()
   m_camera_info_msg.reset();
   m_camera_info.reset();
   m_timer.reset();
-  m_publish_timer.reset();
   m_service_capture.reset();
   m_parameters_callback_handle.reset();
 
@@ -229,17 +230,15 @@ void UsbCamNode::init()
     m_parameters.framerate = frame_rate;
   }
 
-  // TODO(lucasw) should this check a little faster than expected frame rate?
-  // TODO(lucasw) how to do small than ms, or fractional ms- std::chrono::nanoseconds?
-  const int period_ms = 1000.0 / frame_rate;
+  // Capture and publish in one callback so a blocking camera read cannot starve
+  // a separate publishing timer. Retain sub-millisecond precision at 30 FPS.
+  const auto capture_period = std::chrono::duration_cast<std::chrono::nanoseconds>(
+    std::chrono::duration<double>(1.0 / frame_rate));
   m_timer = this->create_wall_timer(
-    std::chrono::milliseconds(static_cast<int64_t>(period_ms)),
+    capture_period,
     std::bind(&UsbCamNode::update, this));
-  RCLCPP_INFO_STREAM(this->get_logger(), "Timer triggering every " << period_ms << " ms");
-  const int publish_period_ms = 1000.0 / m_parameters.framerate;
-  m_publish_timer = this->create_wall_timer(
-    std::chrono::milliseconds(static_cast<int64_t>(publish_period_ms)),
-    std::bind(&UsbCamNode::publish, this));
+  RCLCPP_INFO_STREAM(
+    this->get_logger(), "Capture timer triggering every " << capture_period.count() << " ns");
 }
 
 void UsbCamNode::get_params()
@@ -453,6 +452,16 @@ void UsbCamNode::update()
       take_and_send_image();
     if (!isSuccessful) {
       RCLCPP_WARN_ONCE(this->get_logger(), "USB camera did not respond in time.");
+      return;
+    }
+
+    // Drain the camera at its capture rate, publishing only fresh frames. A
+    // frame accumulator also preserves requested rates below the capture rate.
+    const auto capture_rate = static_cast<int>(m_camera->get_frame_rate());
+    m_publish_frame_accumulator += std::min(m_parameters.framerate, capture_rate);
+    if (m_publish_frame_accumulator >= capture_rate) {
+      m_publish_frame_accumulator -= capture_rate;
+      publish();
     }
   }
 }
